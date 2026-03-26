@@ -1,4 +1,4 @@
-name: RDP greenboyMC - Intro The Flash VIP PRO
+name: RDP greenboyMC - The Flash VIP PRO
 
 on:
   workflow_dispatch:
@@ -50,42 +50,46 @@ jobs:
 
           Write-Host "✅ Setup RDP xong!" -ForegroundColor Green
 
-      - name: Download Playit
+      - name: Download ngrok
         run: |
-          Invoke-WebRequest -Uri "https://github.com/playit-cloud/playit-agent/releases/latest/download/playit-windows-x86_64-signed.exe" -OutFile playit.exe
+          Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile ngrok.zip
+          Expand-Archive ngrok.zip -DestinationPath .
 
-      - name: Start Tunnel
+      - name: Auth ngrok
+        env:
+          NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+        run: .\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
+
+      - name: Start Ngrok Tunnel
         run: |
-          $job = Start-Job -ScriptBlock {
-            ssh -o StrictHostKeyChecking=no -R 3389:localhost:3389 plan@ssh.localhost.run 2>&1
-          }
+          Start-Process -WindowStyle Hidden -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389 --region=ap --log=ngrok.log --log-level=info"
 
           $maxRetry = 20
-          $tunnel = $null
+          $tcpTunnel = $null
 
           for ($i = 0; $i -lt $maxRetry; $i++) {
             Start-Sleep -Seconds 5
-            $log = Receive-Job $job 2>&1 | Out-String
-            Write-Host $log
-            $match = [regex]::Match($log, '[a-z0-9\-]+\.lhr\.life:\d+')
-            if ($match.Success) {
-              $tunnel = $match.Value
-              break
+            try {
+              $tunnels = Invoke-RestMethod http://localhost:4040/api/tunnels -ErrorAction Stop
+              $tcpTunnel = ($tunnels.tunnels | Where-Object { $_.proto -eq "tcp" }).public_url
+              if ($tcpTunnel) { break }
+            } catch {
+              Write-Host "Chờ ngrok... ($i/$maxRetry)" -ForegroundColor DarkYellow
             }
-            Write-Host "Chờ tunnel... ($i/$maxRetry)" -ForegroundColor DarkYellow
           }
 
-          if ($tunnel) {
+          if ($tcpTunnel) {
+            $hostPort = $tcpTunnel -replace "tcp://", ""
             Write-Host ""
             Write-Host "╔════════════════════════════════════════╗" -ForegroundColor Cyan
             Write-Host "║     RDP GREENBOYMC - THE FLASH PRO     ║" -ForegroundColor Magenta
-            Write-Host "║  HOST: $tunnel" -ForegroundColor Green
-            Write-Host "║  Username → greenboyMC                 ║" -ForegroundColor Yellow
-            Write-Host "║  Password → greenboy123@               ║" -ForegroundColor Yellow
+            Write-Host "║  HOST: $hostPort" -ForegroundColor Green
+            Write-Host "║  Username : greenboyMC                 ║" -ForegroundColor Yellow
+            Write-Host "║  Password : greenboy123@               ║" -ForegroundColor Yellow
             Write-Host "╚════════════════════════════════════════╝" -ForegroundColor Cyan
           } else {
-            Write-Host "❌ Không lấy được tunnel!" -ForegroundColor Red
+            Write-Host "❌ Không lấy được tunnel! Log:" -ForegroundColor Red
+            if (Test-Path ngrok.log) { Get-Content ngrok.log | Select-Object -Last 20 }
           }
 
-          Wait-Job $job
           Start-Sleep -Seconds 21420
