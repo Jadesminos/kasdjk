@@ -1,4 +1,4 @@
-name: RDP greenboyMC - The Flash VIP PRO
+name: RDP Localtonet - The Flash VIP PRO
 
 on:
   workflow_dispatch:
@@ -9,87 +9,47 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Setup RDP
+      - name: Setup RDP User
         run: |
+          # Cho phép kết nối RDP
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-
+          
+          # Tạo User và Password (Bạn có thể đổi greenboy123@ thành pass khác)
           $fixedPassword = "greenboy123@"
           New-LocalUser "greenboyMC" -Password (ConvertTo-SecureString -AsPlainText $fixedPassword -Force) -FullName "greenboyMC VIP" -ErrorAction SilentlyContinue
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "greenboyMC" -ErrorAction SilentlyContinue
           Add-LocalGroupMember -Group "Administrators" -Member "greenboyMC" -ErrorAction SilentlyContinue
-
-          $services = @("SysMain","WSearch","wuauserv","WinDefend","DiagTrack","DPS","DoSvc","Spooler","Themes","BITS","wscsvc","SecurityHealthService","Sense","OneSyncSvc","CDPSvc","DmEnrollmentSvc","PcaSvc","WerSvc","TabletInputService","XblAuthManager","XblGameSave","XboxNetApiSvc","BthAvctpSvc","RmSvc","WlanSvc","WbioSrvc")
+          
+          # Tối ưu hóa Windows (Tắt các service thừa để máy mượt hơn)
+          $services = @("SysMain","WSearch","wuauserv","WinDefend","DiagTrack","DPS","DoSvc","Spooler","Themes","BITS")
           foreach ($svc in $services) {
             Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
             Set-Service -Name $svc -StartupType Disabled -ErrorAction SilentlyContinue
           }
+          Write-Host "✅ Setup User & Windows xong!" -ForegroundColor Green
 
-          Set-Service -Name "Audiosrv" -StartupType Automatic -ErrorAction SilentlyContinue
-          Set-Service -Name "AudioEndpointBuilder" -StartupType Automatic -ErrorAction SilentlyContinue
-          Start-Service -Name "Audiosrv" -ErrorAction SilentlyContinue
-          Start-Service -Name "AudioEndpointBuilder" -ErrorAction SilentlyContinue
-
-          Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
-
-          $rdpPolicy = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
-          New-Item -Path $rdpPolicy -Force | Out-Null
-          Set-ItemProperty -Path $rdpPolicy -Name "MaxCompressionLevel" -Value 2
-          Set-ItemProperty -Path $rdpPolicy -Name "MinEncryptionLevel" -Value 1
-          Set-ItemProperty -Path $rdpPolicy -Name "fEnableAudioCapture" -Value 1
-          Set-ItemProperty -Path $rdpPolicy -Name "fDisableAudioCapture" -Value 0
-          Set-ItemProperty -Path $rdpPolicy -Name "fDisableAudioRedirection" -Value 0
-
-          $rdpTcp = 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp'
-          Set-ItemProperty -Path $rdpTcp -Name "ColorDepth" -Value 4
-          Set-ItemProperty -Path $rdpTcp -Name "fEnableThinClient" -Value 1
-          Set-ItemProperty -Path $rdpTcp -Name "fEnableDesktopComposition" -Value 0
-
-          Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name "TaskbarAnimations" -Value 0 -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\DWM' -Name "Animations" -Value 0 -ErrorAction SilentlyContinue
-
-          Write-Host "✅ Setup RDP xong!" -ForegroundColor Green
-
-      - name: Download ngrok
+      - name: Install Localtonet
         run: |
-          Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile ngrok.zip
-          Expand-Archive ngrok.zip -DestinationPath .
+          Invoke-WebRequest -Uri "https://localtonet.com/download/localtonet-windows-x64.zip" -OutFile localtonet.zip
+          Expand-Archive localtonet.zip -DestinationPath .
+          Write-Host "✅ Tải Localtonet thành công!" -ForegroundColor Green
 
-      - name: Auth ngrok
+      - name: Start Localtonet Tunnel
         env:
-          NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
-        run: .\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
-
-      - name: Start Ngrok Tunnel
+          L_TOKEN: ${{ secrets.LOCALTONET_TOKEN }}
         run: |
-          Start-Process -WindowStyle Hidden -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389 --region=ap --log=ngrok.log --log-level=info"
+          # Cấu hình Token
+          .\localtonet.exe authtoken $Env:L_TOKEN
+          
+          # Chạy Tunnel TCP cho port RDP (3389)
+          Start-Process -WindowStyle Hidden -FilePath ".\localtonet.exe" -ArgumentList "tcp --port 3389"
+          
+          Write-Host "🚀 RDP ĐANG CHẠY!" -ForegroundColor Magenta
+          Write-Host "1. Truy cập https://localtonet.com/tunnel/tcp" -ForegroundColor Cyan
+          Write-Host "2. Copy địa chỉ IP:Port ở cột 'Server IP'" -ForegroundColor Cyan
+          Write-Host "3. Username: greenboyMC | Pass: greenboy123@" -ForegroundColor Yellow
 
-          $maxRetry = 20
-          $tcpTunnel = $null
-
-          for ($i = 0; $i -lt $maxRetry; $i++) {
-            Start-Sleep -Seconds 5
-            try {
-              $tunnels = Invoke-RestMethod http://localhost:4040/api/tunnels -ErrorAction Stop
-              $tcpTunnel = ($tunnels.tunnels | Where-Object { $_.proto -eq "tcp" }).public_url
-              if ($tcpTunnel) { break }
-            } catch {
-              Write-Host "Chờ ngrok... ($i/$maxRetry)" -ForegroundColor DarkYellow
-            }
-          }
-
-          if ($tcpTunnel) {
-            $hostPort = $tcpTunnel -replace "tcp://", ""
-            Write-Host ""
-            Write-Host "╔════════════════════════════════════════╗" -ForegroundColor Cyan
-            Write-Host "║     RDP GREENBOYMC - THE FLASH PRO     ║" -ForegroundColor Magenta
-            Write-Host "║  HOST: $hostPort" -ForegroundColor Green
-            Write-Host "║  Username : greenboyMC                 ║" -ForegroundColor Yellow
-            Write-Host "║  Password : greenboy123@               ║" -ForegroundColor Yellow
-            Write-Host "╚════════════════════════════════════════╝" -ForegroundColor Cyan
-          } else {
-            Write-Host "❌ Không lấy được tunnel! Log:" -ForegroundColor Red
-            if (Test-Path ngrok.log) { Get-Content ngrok.log | Select-Object -Last 20 }
-          }
-
-          Start-Sleep -Seconds 21420
+      - name: Keep Alive (6 hours)
+        run: |
+          Start-Sleep -Seconds 21600
