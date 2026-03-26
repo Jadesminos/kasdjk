@@ -24,107 +24,32 @@ jobs:
           NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
         run: .\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
 
-      - name: Setup RDP + Max Fast + Reduce Lag Cực Mạnh + CÓ TIẾNG NGHE
-        run: |
-          # Enable RDP + Firewall
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-
-          # Tạo user VIP
-          $fixedPassword = "greenboy123@"
-          New-LocalUser "greenboyMC" -Password (ConvertTo-SecureString -AsPlainText $fixedPassword -Force) -FullName "greenboyMC VIP" -Description "RDP GreenboyMC The Flash PRO" -ErrorAction SilentlyContinue
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "greenboyMC" -ErrorAction SilentlyContinue
-          Add-LocalGroupMember -Group "Administrators" -Member "greenboyMC" -ErrorAction SilentlyContinue
-
-          # TẮT SERVICE NẶNG (GIỮ LẠI AUDIO để có tiếng)
-          $services = @("SysMain","WSearch","wuauserv","WinDefend","DiagTrack","DPS","DoSvc","Spooler","Themes","BITS","wscsvc","SecurityHealthService","Sense","OneSyncSvc","CDPSvc","DmEnrollmentSvc","PcaSvc","WerSvc","TabletInputService","XblAuthManager","XblGameSave","XboxNetApiSvc","BthAvctpSvc","RmSvc","WlanSvc","WbioSrvc")
-          foreach ($svc in $services) {
-            Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
-            Set-Service -Name $svc -StartupType Disabled -ErrorAction SilentlyContinue
-          }
-          # GIỮ AUDIO service chạy (bắt buộc để có tiếng)
-          Set-Service -Name "Audiosrv" -StartupType Automatic -ErrorAction SilentlyContinue
-          Set-Service -Name "AudioEndpointBuilder" -StartupType Automatic -ErrorAction SilentlyContinue
-          Start-Service -Name "Audiosrv" -ErrorAction SilentlyContinue
-          Start-Service -Name "AudioEndpointBuilder" -ErrorAction SilentlyContinue
-
-          Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
-
-          # Tối ưu RDP siêu mượt + hỗ trợ audio
-          $rdpPolicy = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
-          New-Item -Path $rdpPolicy -Force | Out-Null
-          Set-ItemProperty -Path $rdpPolicy -Name "MaxCompressionLevel" -Value 2
-          Set-ItemProperty -Path $rdpPolicy -Name "MinEncryptionLevel" -Value 1
-          Set-ItemProperty -Path $rdpPolicy -Name "NegotiateSecurityLayer" -Value 0
-          Set-ItemProperty -Path $rdpPolicy -Name "fDisableCdm" -Value 1
-          Set-ItemProperty -Path $rdpPolicy -Name "fEnableAudioCapture" -Value 1
-          Set-ItemProperty -Path $rdpPolicy -Name "fDisableAudioCapture" -Value 0
-          Set-ItemProperty -Path $rdpPolicy -Name "fDisableAudioRedirection" -Value 0
-          Set-ItemProperty -Path $rdpPolicy -Name "fMinBandwidth" -Value 0
-
-          $rdpTcp = 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp'
-          Set-ItemProperty -Path $rdpTcp -Name "ColorDepth" -Value 4
-          Set-ItemProperty -Path $rdpTcp -Name "fEnableThinClient" -Value 1
-          Set-ItemProperty -Path $rdpTcp -Name "fEnableDesktopComposition" -Value 0
-          Set-ItemProperty -Path $rdpTcp -Name "fEnableWddmDriver" -Value 0
-          Set-ItemProperty -Path $rdpTcp -Name "NetworkThrottlingIndex" -Value 0xFFFFFFFF
-
-          # Tắt visual effects (vẫn giảm lag mạnh)
-          Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' -Name "VisualFXSetting" -Value 2 -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name "TaskbarAnimations" -Value 0
-          Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name "ListviewAlphaSelect" -Value 0
-          Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\DWM' -Name "EnableAeroPeek" -Value 0
-          Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\DWM' -Name "Animations" -Value 0
-          Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop\WindowMetrics' -Name "MinAnimate" -Value "0"
-          Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' -Name "EnableTransparency" -Value 0
-          Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name "DragFullWindows" -Value "0"
-
-          # Intro VIP
-          Write-Host ""
-          Write-Host "╔════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-          Write-Host "║         RDP GREENBOYMC - THE FLASH VIP PRO         ║" -ForegroundColor Magenta
-          Write-Host "║  ✅ ĐÃ CÓ TIẾNG NGHE - KHÔNG CÒN CẮM NGHE NỮA!     ║" -ForegroundColor Green
-          Write-Host "║  Username → greenboyMC                             ║" -ForegroundColor Yellow
-          Write-Host "║  Password → greenboy123@                           ║" -ForegroundColor Yellow
-          Write-Host "╚════════════════════════════════════════════════════╝" -ForegroundColor Cyan
-          Write-Host ""
-
       - name: Start Ngrok Tunnel - VIP PRO Flash Mode (Low Data + Có Tiếng)
         run: |
-          Write-Host ""
-          Write-Host "╔════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-          Write-Host "║         RDP GREENBOYMC - THE FLASH VIP PRO         ║" -ForegroundColor Magenta
-          Write-Host "║  ⚡ GIẢM LAG CỰC MẠNH - CÓ TIẾNG NGHE ĐẦY ĐỦ       ║" -ForegroundColor Green
-          Write-Host "║  - Vào Local Resources → Remote audio → chọn      ║" -ForegroundColor Yellow
-          Write-Host "║    'Play on this computer' để nghe tiếng           ║" -ForegroundColor Yellow
-          Write-Host "║  - Chọn 'Modem (56 Kbps)' để ít data + mượt        ║" -ForegroundColor Yellow
-          Write-Host "╚════════════════════════════════════════════════════╝" -ForegroundColor Cyan
-          Write-Host ""
-
           Start-Process -WindowStyle Hidden -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389 --log=stdout --log-level=info --region=ap"
 
-          Start-Sleep -Seconds 25
+          $maxRetry = 20
+          $tcpTunnel = $null
 
-          try {
-            $tunnels = Invoke-RestMethod http://localhost:4040/api/tunnels
-            $tcpTunnel = ($tunnels.tunnels | Where-Object { $_.proto -eq "tcp" }).public_url
-            if ($tcpTunnel) {
-              $hostPort = $tcpTunnel -replace "tcp://", ""
-              Write-Host "🌟 NGROK VIP ADDRESS:" -ForegroundColor Green
-              Write-Host "          $hostPort" -ForegroundColor Magenta
-              Write-Host ""
-              Write-Host "  Username → greenboyMC" -ForegroundColor Yellow
-              Write-Host "  Password → greenboy123@" -ForegroundColor Yellow
-              Write-Host ""
-              Write-Host "✅ Kết nối xong là có tiếng ngay! Dùng Modem 56Kbps để session lâu ⚡" -ForegroundColor Green
-            } else {
-              Write-Host "❌ Không thấy tunnel!" -ForegroundColor Red
+          for ($i = 0; $i -lt $maxRetry; $i++) {
+            Start-Sleep -Seconds 5
+            try {
+              $tunnels = Invoke-RestMethod http://localhost:4040/api/tunnels -ErrorAction Stop
+              $tcpTunnel = ($tunnels.tunnels | Where-Object { $_.proto -eq "tcp" }).public_url
+              if ($tcpTunnel) { break }
+            } catch {
+              Write-Host "Chờ ngrok... ($i/$maxRetry)" -ForegroundColor DarkYellow
             }
-          } catch {
-            Write-Host "Lỗi lấy tunnel: $_" -ForegroundColor Red
           }
 
-          Write-Host ""
-          Write-Host "Session max ~6h. Re-run để renew." -ForegroundColor DarkCyan
+          if ($tcpTunnel) {
+            $hostPort = $tcpTunnel -replace "tcp://", ""
+            Write-Host "🌟 NGROK VIP ADDRESS:" -ForegroundColor Green
+            Write-Host "          $hostPort" -ForegroundColor Magenta
+            Write-Host "  Username → greenboyMC" -ForegroundColor Yellow
+            Write-Host "  Password → greenboy123@" -ForegroundColor Yellow
+          } else {
+            Write-Host "❌ Không lấy được tunnel!" -ForegroundColor Red
+          }
 
           Start-Sleep -Seconds 21420
