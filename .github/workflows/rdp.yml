@@ -50,23 +50,25 @@ jobs:
 
           Write-Host "✅ Setup RDP xong!" -ForegroundColor Green
 
-      - name: Download Cloudflared
+      - name: Download Playit
         run: |
-          Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile cloudflared.exe
+          Invoke-WebRequest -Uri "https://github.com/playit-cloud/playit-agent/releases/latest/download/playit-windows-x86_64-signed.exe" -OutFile playit.exe
 
-      - name: Start Tunnel
+      - name: Start Playit Tunnel
         run: |
-          Start-Process -WindowStyle Hidden -FilePath ".\cloudflared.exe" -ArgumentList "tunnel --url tcp://localhost:3389 --no-autoupdate" -RedirectStandardOutput "cf.log" -RedirectStandardError "cf-err.log"
+          Start-Process -WindowStyle Hidden -FilePath ".\playit.exe" -RedirectStandardOutput "playit.log" -RedirectStandardError "playit-err.log"
 
-          $maxRetry = 20
+          $maxRetry = 30
           $tunnel = $null
 
           for ($i = 0; $i -lt $maxRetry; $i++) {
             Start-Sleep -Seconds 5
             $log = ""
-            if (Test-Path cf-err.log) { $log = Get-Content cf-err.log -Raw }
-            if (Test-Path cf.log) { $log += Get-Content cf.log -Raw }
-            $match = [regex]::Match($log, 'https://[a-z0-9\-]+\.trycloudflare\.com')
+            if (Test-Path playit.log) { $log = Get-Content playit.log -Raw }
+            if (Test-Path playit-err.log) { $log += Get-Content playit-err.log -Raw }
+            Write-Host "--- Log ---" -ForegroundColor DarkGray
+            Write-Host $log
+            $match = [regex]::Match($log, '[a-z0-9\.\-]+\.joinmc\.link:\d+|[a-z0-9\.\-]+\.playit\.gg:\d+')
             if ($match.Success) {
               $tunnel = $match.Value
               break
@@ -79,13 +81,13 @@ jobs:
             Write-Host "╔════════════════════════════════════════╗" -ForegroundColor Cyan
             Write-Host "║     RDP GREENBOYMC - THE FLASH PRO     ║" -ForegroundColor Magenta
             Write-Host "║  HOST: $tunnel" -ForegroundColor Green
-            Write-Host "║  Port: 3389                            ║" -ForegroundColor Green
             Write-Host "║  Username → greenboyMC                 ║" -ForegroundColor Yellow
             Write-Host "║  Password → greenboy123@               ║" -ForegroundColor Yellow
             Write-Host "╚════════════════════════════════════════╝" -ForegroundColor Cyan
           } else {
             Write-Host "❌ Không lấy được tunnel!" -ForegroundColor Red
-            Get-Content cf-err.log -ErrorAction SilentlyContinue
+            if (Test-Path playit.log) { Get-Content playit.log }
+            if (Test-Path playit-err.log) { Get-Content playit-err.log }
           }
 
           Start-Sleep -Seconds 21420
