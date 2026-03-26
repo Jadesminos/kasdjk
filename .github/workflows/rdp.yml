@@ -54,21 +54,20 @@ jobs:
         run: |
           Invoke-WebRequest -Uri "https://github.com/playit-cloud/playit-agent/releases/latest/download/playit-windows-x86_64-signed.exe" -OutFile playit.exe
 
-      - name: Start Playit Tunnel
+      - name: Start Tunnel
         run: |
-          Start-Process -WindowStyle Hidden -FilePath ".\playit.exe" -RedirectStandardOutput "playit.log" -RedirectStandardError "playit-err.log"
+          $job = Start-Job -ScriptBlock {
+            ssh -o StrictHostKeyChecking=no -R 3389:localhost:3389 plan@ssh.localhost.run 2>&1
+          }
 
-          $maxRetry = 30
+          $maxRetry = 20
           $tunnel = $null
 
           for ($i = 0; $i -lt $maxRetry; $i++) {
             Start-Sleep -Seconds 5
-            $log = ""
-            if (Test-Path playit.log) { $log = Get-Content playit.log -Raw }
-            if (Test-Path playit-err.log) { $log += Get-Content playit-err.log -Raw }
-            Write-Host "--- Log ---" -ForegroundColor DarkGray
+            $log = Receive-Job $job 2>&1 | Out-String
             Write-Host $log
-            $match = [regex]::Match($log, '[a-z0-9\.\-]+\.joinmc\.link:\d+|[a-z0-9\.\-]+\.playit\.gg:\d+')
+            $match = [regex]::Match($log, '[a-z0-9\-]+\.lhr\.life:\d+')
             if ($match.Success) {
               $tunnel = $match.Value
               break
@@ -86,8 +85,7 @@ jobs:
             Write-Host "╚════════════════════════════════════════╝" -ForegroundColor Cyan
           } else {
             Write-Host "❌ Không lấy được tunnel!" -ForegroundColor Red
-            if (Test-Path playit.log) { Get-Content playit.log }
-            if (Test-Path playit-err.log) { Get-Content playit-err.log }
           }
 
+          Wait-Job $job
           Start-Sleep -Seconds 21420
