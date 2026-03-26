@@ -14,90 +14,42 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Download ngrok
+      - name: Download Cloudflared
         run: |
-          Invoke-WebRequest -Uri "${{ github.event.inputs.ngrok_download_url }}" -OutFile ngrok.zip
-          Expand-Archive ngrok.zip -DestinationPath .
+          Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile cloudflared.exe
 
-      - name: Auth ngrok
-        env:
-          NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
-        run: .\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
-
-      - name: Setup RDP
+      - name: Start Tunnel
         run: |
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-
-          $fixedPassword = "greenboy123@"
-          New-LocalUser "greenboyMC" -Password (ConvertTo-SecureString -AsPlainText $fixedPassword -Force) -FullName "greenboyMC VIP" -Description "RDP GreenboyMC" -ErrorAction SilentlyContinue
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "greenboyMC" -ErrorAction SilentlyContinue
-          Add-LocalGroupMember -Group "Administrators" -Member "greenboyMC" -ErrorAction SilentlyContinue
-
-          $services = @("SysMain","WSearch","wuauserv","WinDefend","DiagTrack","DPS","DoSvc","Spooler","Themes","BITS","wscsvc","SecurityHealthService","Sense","OneSyncSvc","CDPSvc","DmEnrollmentSvc","PcaSvc","WerSvc","TabletInputService","XblAuthManager","XblGameSave","XboxNetApiSvc","BthAvctpSvc","RmSvc","WlanSvc","WbioSrvc")
-          foreach ($svc in $services) {
-            Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
-            Set-Service -Name $svc -StartupType Disabled -ErrorAction SilentlyContinue
-          }
-
-          Set-Service -Name "Audiosrv" -StartupType Automatic -ErrorAction SilentlyContinue
-          Set-Service -Name "AudioEndpointBuilder" -StartupType Automatic -ErrorAction SilentlyContinue
-          Start-Service -Name "Audiosrv" -ErrorAction SilentlyContinue
-          Start-Service -Name "AudioEndpointBuilder" -ErrorAction SilentlyContinue
-
-          Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
-
-          $rdpPolicy = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
-          New-Item -Path $rdpPolicy -Force | Out-Null
-          Set-ItemProperty -Path $rdpPolicy -Name "MaxCompressionLevel" -Value 2
-          Set-ItemProperty -Path $rdpPolicy -Name "MinEncryptionLevel" -Value 1
-          Set-ItemProperty -Path $rdpPolicy -Name "fEnableAudioCapture" -Value 1
-          Set-ItemProperty -Path $rdpPolicy -Name "fDisableAudioCapture" -Value 0
-          Set-ItemProperty -Path $rdpPolicy -Name "fDisableAudioRedirection" -Value 0
-
-          $rdpTcp = 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp'
-          Set-ItemProperty -Path $rdpTcp -Name "ColorDepth" -Value 4
-          Set-ItemProperty -Path $rdpTcp -Name "fEnableThinClient" -Value 1
-          Set-ItemProperty -Path $rdpTcp -Name "fEnableDesktopComposition" -Value 0
-
-          Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name "TaskbarAnimations" -Value 0 -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\DWM' -Name "Animations" -Value 0 -ErrorAction SilentlyContinue
-
-          Write-Host "✅ Setup RDP xong!" -ForegroundColor Green
-
-      - name: Start Ngrok Tunnel
-        run: |
-          Start-Process -WindowStyle Hidden -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389 --region=ap --log=ngrok.log --log-level=debug"
+          Start-Process -WindowStyle Hidden -FilePath ".\cloudflared.exe" -ArgumentList "tunnel --url tcp://localhost:3389 --no-autoupdate" -RedirectStandardOutput "cf.log" -RedirectStandardError "cf-err.log"
 
           $maxRetry = 20
-          $tcpTunnel = $null
+          $tunnel = $null
 
           for ($i = 0; $i -lt $maxRetry; $i++) {
             Start-Sleep -Seconds 5
-            if (Test-Path ngrok.log) {
-              Get-Content ngrok.log | Select-Object -Last 3
+            $log = ""
+            if (Test-Path cf-err.log) { $log = Get-Content cf-err.log -Raw }
+            if (Test-Path cf.log) { $log += Get-Content cf.log -Raw }
+            $match = [regex]::Match($log, 'https://[a-z0-9\-]+\.trycloudflare\.com')
+            if ($match.Success) {
+              $tunnel = $match.Value
+              break
             }
-            try {
-              $tunnels = Invoke-RestMethod http://localhost:4040/api/tunnels -ErrorAction Stop
-              $tcpTunnel = ($tunnels.tunnels | Where-Object { $_.proto -eq "tcp" }).public_url
-              if ($tcpTunnel) { break }
-            } catch {
-              Write-Host "Chờ ngrok... ($i/$maxRetry)" -ForegroundColor DarkYellow
-            }
+            Write-Host "Chờ tunnel... ($i/$maxRetry)" -ForegroundColor DarkYellow
           }
 
-          if ($tcpTunnel) {
-            $hostPort = $tcpTunnel -replace "tcp://", ""
+          if ($tunnel) {
             Write-Host ""
             Write-Host "╔════════════════════════════════════════╗" -ForegroundColor Cyan
             Write-Host "║     RDP GREENBOYMC - THE FLASH PRO     ║" -ForegroundColor Magenta
-            Write-Host "║  NGROK: $hostPort" -ForegroundColor Green
+            Write-Host "║  HOST: $tunnel" -ForegroundColor Green
+            Write-Host "║  Port: 3389                            ║" -ForegroundColor Green
             Write-Host "║  Username → greenboyMC                 ║" -ForegroundColor Yellow
             Write-Host "║  Password → greenboy123@               ║" -ForegroundColor Yellow
             Write-Host "╚════════════════════════════════════════╝" -ForegroundColor Cyan
           } else {
-            Write-Host "❌ Không lấy được tunnel! Log:" -ForegroundColor Red
-            if (Test-Path ngrok.log) { Get-Content ngrok.log | Select-Object -Last 20 }
+            Write-Host "❌ Không lấy được tunnel!" -ForegroundColor Red
+            Get-Content cf-err.log -ErrorAction SilentlyContinue
           }
 
           Start-Sleep -Seconds 21420
