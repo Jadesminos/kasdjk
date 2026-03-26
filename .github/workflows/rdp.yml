@@ -2,11 +2,6 @@ name: RDP greenboyMC - Intro The Flash VIP PRO
 
 on:
   workflow_dispatch:
-    inputs:
-      ngrok_download_url:
-        description: 'Ngrok download link'
-        required: true
-        default: 'https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip'
 
 jobs:
   build:
@@ -14,6 +9,47 @@ jobs:
     timeout-minutes: 360
 
     steps:
+      - name: Setup RDP
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+          $fixedPassword = "greenboy123@"
+          New-LocalUser "greenboyMC" -Password (ConvertTo-SecureString -AsPlainText $fixedPassword -Force) -FullName "greenboyMC VIP" -ErrorAction SilentlyContinue
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "greenboyMC" -ErrorAction SilentlyContinue
+          Add-LocalGroupMember -Group "Administrators" -Member "greenboyMC" -ErrorAction SilentlyContinue
+
+          $services = @("SysMain","WSearch","wuauserv","WinDefend","DiagTrack","DPS","DoSvc","Spooler","Themes","BITS","wscsvc","SecurityHealthService","Sense","OneSyncSvc","CDPSvc","DmEnrollmentSvc","PcaSvc","WerSvc","TabletInputService","XblAuthManager","XblGameSave","XboxNetApiSvc","BthAvctpSvc","RmSvc","WlanSvc","WbioSrvc")
+          foreach ($svc in $services) {
+            Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
+            Set-Service -Name $svc -StartupType Disabled -ErrorAction SilentlyContinue
+          }
+
+          Set-Service -Name "Audiosrv" -StartupType Automatic -ErrorAction SilentlyContinue
+          Set-Service -Name "AudioEndpointBuilder" -StartupType Automatic -ErrorAction SilentlyContinue
+          Start-Service -Name "Audiosrv" -ErrorAction SilentlyContinue
+          Start-Service -Name "AudioEndpointBuilder" -ErrorAction SilentlyContinue
+
+          Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
+
+          $rdpPolicy = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
+          New-Item -Path $rdpPolicy -Force | Out-Null
+          Set-ItemProperty -Path $rdpPolicy -Name "MaxCompressionLevel" -Value 2
+          Set-ItemProperty -Path $rdpPolicy -Name "MinEncryptionLevel" -Value 1
+          Set-ItemProperty -Path $rdpPolicy -Name "fEnableAudioCapture" -Value 1
+          Set-ItemProperty -Path $rdpPolicy -Name "fDisableAudioCapture" -Value 0
+          Set-ItemProperty -Path $rdpPolicy -Name "fDisableAudioRedirection" -Value 0
+
+          $rdpTcp = 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp'
+          Set-ItemProperty -Path $rdpTcp -Name "ColorDepth" -Value 4
+          Set-ItemProperty -Path $rdpTcp -Name "fEnableThinClient" -Value 1
+          Set-ItemProperty -Path $rdpTcp -Name "fEnableDesktopComposition" -Value 0
+
+          Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name "TaskbarAnimations" -Value 0 -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\DWM' -Name "Animations" -Value 0 -ErrorAction SilentlyContinue
+
+          Write-Host "✅ Setup RDP xong!" -ForegroundColor Green
+
       - name: Download Cloudflared
         run: |
           Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile cloudflared.exe
